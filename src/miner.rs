@@ -9,17 +9,12 @@ use num_bigint::BigUint;
 use std::ops::Shl;
 use std::time::SystemTime;
 use super::*;
-//Constant for conversion to uint512
-pub fn conv_add()->Vec<u8>
-{
-    vec![0,0,0,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,128,2,0,0]
-}
 
 //Builds an Extranonce of specified length, consisting of only 0
 pub fn extranonce2(length: &u32) -> Vec<u8>
 {
     let mut extranonce2 = vec![];
-    for _i in 0..*length/2
+    for _i in 0..*length / 2
     {
         extranonce2.extend(vec![0]);
     }
@@ -41,34 +36,33 @@ pub fn build_coinbase(coinb1: &Vec<u8>, coinb2: &Vec<u8>, extranonce1: &Vec<u8>,
 pub fn build_root(branches: &[Vec<u8>], coinbase: &Vec<u8>) -> Vec<u8>
 {
     let mut root = coinbase.to_vec();
-    for i in 0..branches.len() 
-    {   
-        if !branches[i].is_empty(){
+    for i in 0..branches.len()
+    {
+        if !branches[i].is_empty() {
             root.extend(&branches[i]);
             root = doublesha(&root);
         }
-       
     }
     return revec(&root);
 }
 
 //Build Blockheader out of single elements
-pub fn build_header(version: &Vec<u8>, prevhash: &Vec<u8>, merkle_root: &Vec<u8>, ntime: &Vec<u8>, nbits: &Vec<u8>, nonce: &u32)->Vec<u8>
+pub fn build_header(version: &Vec<u8>, prevhash: &Vec<u8>, merkle_root: &Vec<u8>, ntime: &Vec<u8>, nbits: &Vec<u8>, nonce: &u32) -> Vec<u8>
 {
     let mut header = vec![];
+    header.extend(version);
     header.extend(prevhash);
     header.extend(merkle_root);
     header.extend(ntime);
     header.extend(nbits);
     header.extend(u32_u8(&nonce));
-    header.extend(conv_add());
     return header;
 }
 
 //Convert hexstring to u8
-fn strhex_to_u8(hex: &str) -> u8 
+fn strhex_to_u8(hex: &str) -> u8
 {
-    let res = u8::from_str_radix(hex, 16); 
+    let res = u8::from_str_radix(hex, 16);
     match res {
         Ok(v) => v,
         Err(e) => panic!("Conversion hex to u8 failed: {}", e),
@@ -76,74 +70,75 @@ fn strhex_to_u8(hex: &str) -> u8
 }
 
 //Perform Double-SHA256-Algorithm
-pub fn doublesha(prehash: &Vec<u8>)->Vec<u8>{
-    return crypto_hash::digest(crypto_hash::Algorithm::SHA256, &crypto_hash::digest(crypto_hash::Algorithm::SHA256, &prehash));
+pub fn doublesha(prehash: &Vec<u8>) -> Vec<u8> {
+    return digest(Algorithm::SHA256, &digest(Algorithm::SHA256, &prehash));
 }
 
 //Reverse vector of type u8
-pub fn revec(vec: &Vec<u8>)->Vec<u8>{
-    let v = vec.to_vec();
-    return v.into_iter().rev().collect();
+pub fn revec(vec: &Vec<u8>) -> Vec<u8> {
+    let mut v = vec.to_vec();
+    v.reverse();
+    return v;
 }
 
 //Convert u32 to vector of type u8
-pub fn u32_u8 (u: &u32) -> Vec<u8> {
+pub fn u32_u8(u: &u32) -> Vec<u8> {
     vec![
-    (u >> 0) as u8,
-    (u >> 8) as u8,
-    (u >> 16) as u8,
-    (u >> 24) as u8,]
+        (u >> 0) as u8,
+        (u >> 8) as u8,
+        (u >> 16) as u8,
+        (u >> 24) as u8, ]
 }
 
 //Calculate difficulty -> Target threshold under which the hash is accepted. Very optimized.
 //See: https://medium.com/@dongha.sohn/bitcoin-6-target-and-difficulty-ee3bc9cc5962
-pub fn calc_diff(nbit: &u32)->Vec<u8>
+pub fn calc_diff(nbit: &u32) -> Vec<u8>
 {
-    let index = 8*((nbit >> 24)-3); 
+    let index = 8 * ((nbit >> 24) - 3);
     let coeff: u32 = nbit & 0x00FFFFFF; //Mask to get the first 24 Bit
     let target = BigUint::from(coeff).shl(index);
-    target.to_bytes_le() 
+    target.to_bytes_le()
 }
 
 //Mining Process
 //See: https://braiins.com/stratum-v1/docs (additional: http://www.righto.com/2014/02/bitcoin-mining-hard-way-algorithms.html)
-pub fn mine(extranonce1: &Vec<u8>, extranonce2_length: &u32, prevhash: &Vec<u8>, coinb1: &Vec<u8>, coinb2: &Vec<u8>, merkle_branches: &[Vec<u8>], version: &Vec<u8>, nbits: &u32, ntime: &Vec<u8>)->Option<(u32,Vec<u8>)>
+pub fn mine(extranonce1: &Vec<u8>, extranonce2_length: &u32, prevhash: &Vec<u8>, coinb1: &Vec<u8>, coinb2: &Vec<u8>, merkle_branches: &[Vec<u8>], version: &Vec<u8>, nbits: &u32, ntime: &Vec<u8>) -> Option<(u32, Vec<u8>)>
 {
     let nbits_vec = u32_u8(nbits);
-    let extranonce2=extranonce2(extranonce2_length);
-    let coinbase = build_coinbase(&coinb1, &coinb2, &extranonce1,&extranonce2);
+    let extranonce2 = extranonce2(extranonce2_length);
+    let coinbase = build_coinbase(&coinb1, &coinb2, &extranonce1, &extranonce2);
     let merkle_root = build_root(&merkle_branches, &coinbase);
     let target = calc_diff(nbits);
     let mut nonce = 0;
     let begin = SystemTime::now();
     // max FFFFFFFF
-    while nonce < 0xFFFFFF //Limit
+    while nonce < 0xFFFF //Limit
     {
         let header = doublesha(&build_header(&version, &prevhash, &merkle_root, &ntime, &nbits_vec, &nonce));
         if compare_headers(&header, &target) //Check if result is a solution
         {
             println!("Jackpot Found valid share, lucky number: {}", nonce);
-            return Some((nonce,extranonce2));
+            return Some((nonce, extranonce2));
         }
         nonce = nonce + 1;
     }
     let duration = begin.elapsed().unwrap().as_secs_f32();
-    println!("Hashrate was: {}GH/s", (nonce as f32/duration)/1000000000.0);
+    println!("Hashrate was: {}GH/s", (nonce as f32 / duration) / 1000000000.0);
     return None;
 }
 
 //Compare Header to check if result is an acceptable solution
-pub fn compare_headers(header: &Vec<u8>, target: &Vec<u8>)->bool
+pub fn compare_headers(header: &Vec<u8>, target: &Vec<u8>) -> bool
 {
     //Header has to be smaller than target in decimal comparison. Pseudo code: header < target == true
     let diff = header.len() - target.len();
     let mut result = false;
-    if(header.starts_with(&vec![0; diff]))  //Number of bytes which Header is longer than target have to be completely 0 otherwise header>target
+    if (header.starts_with(&vec![0; diff]))  //Number of bytes which Header is longer than target have to be completely 0 otherwise header>target
     {
         result = true;
         for i in (0..target.len()).rev() //For remaining (unchecked Bytes)
         {
-            if(header[i]<target[target.len()-i]) //Move bytewise through target and header and check that every byte of header is smaller than according target-byte
+            if (header[i] < target[target.len() - i]) //Move bytewise through target and header and check that every byte of header is smaller than according target-byte
             {
                 result = false;
                 break;
@@ -154,18 +149,18 @@ pub fn compare_headers(header: &Vec<u8>, target: &Vec<u8>)->bool
 }
 
 //Convert hexstring to vector of u8
-pub fn extract_u8(convert: &str)->Vec<u8>
+pub fn extract_u8(convert: &str) -> Vec<u8>
 {
     let mut result: Vec<u8> = vec![];
-    for i in 0..(convert.chars().count()/2)
+    for i in 0..(convert.chars().count() / 2)
     {
-        result.push(strhex_to_u8(&convert[2*i..2*(i+1)])); //Convert two hex-digits (one byte) and add them
+        result.push(strhex_to_u8(&convert[2 * i..2 * (i + 1)])); //Convert two hex-digits (one byte) and add them
     }
     return result;
 }
 
 //Convert hexstring to u32
-pub fn extract_u32(convert: &str)->u32
+pub fn extract_u32(convert: &str) -> u32
 {
     let res = u32::from_str_radix(convert, 16);
     match res {
@@ -195,8 +190,15 @@ pub fn extract_u32(convert: &str)->u32
     let clean_jobs = true;
     let _n = mine(&ex1, &ex2_l, &revec(&phash), &coinb1, &coinb2, &m_branch_u8, &vers, &nbits, &ntime);
 }*/
-pub fn start_miner(job:&Job)->Option<(u32,Vec<u8>)>
+pub fn start_miner(job: &Job) -> Option<(u32, Vec<u8>)>
 {
-  return mine(&job.extranonce1, &job.extranonce2, &revec(&job.prev_block_hash), &job.coinb1, &job.coinb2, &job.merkle_branch, &job.version, &job.nbits, &job.ntime);
- 
+    return mine(&job.extranonce1, &job.extranonce2, &revec(&job.prev_block_hash), &job.coinb1, &job.coinb2, &job.merkle_branch, &job.version, &job.nbits, &job.ntime);
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_miner() {
+
+    }
 }
